@@ -73,13 +73,11 @@ jobs:
           EOF
 
       - name: Commit and push manually
-        env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
         run: |
           git config --global user.name "tsugumi-sys"
           git config --global user.email "61897166+tsugumi-sys@users.noreply.github.com"          
           git add Formula/mejiro-cli.rb
           git commit -m "Update mejiro-cli formula for ${{ env.latest_tag }}"
-          git push https://x-access-token:${{ secrets.PERSONAL_TOKEN }}@github.com/tsugumi-sys/homebrew-mejiro.git main
+          git push
 
           
