@@ -1,0 +1,81 @@
+name: Update Formula
+
+on:
+  release:
+    types: [published]
+    # Only trigger on releases in the main repo
+    repositories:
+      - tsugumi-sys/mejiro
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout tap repo
+        uses: actions/checkout@v4
+
+      - name: Download release assets
+        run: |
+          # Download assets for macOS Intel
+          curl -L -o mejiro-cli-x86_64-apple-darwin.tar.gz \
+            https://github.com/tsugumi-sys/mejiro/releases/download/${{ github.event.release.tag_name }}/mejiro-cli-x86_64-apple-darwin.tar.gz
+          
+          # Download assets for macOS ARM
+          curl -L -o mejiro-cli-aarch64-apple-darwin.tar.gz \
+            https://github.com/tsugumi-sys/mejiro/releases/download/${{ github.event.release.tag_name }}/mejiro-cli-aarch64-apple-darwin.tar.gz
+          
+          # Download asset for Linux
+          curl -L -o mejiro-cli-x86_64-unknown-linux-gnu.tar.gz \
+            https://github.com/tsugumi-sys/mejiro/releases/download/${{ github.event.release.tag_name }}/mejiro-cli-x86_64-unknown-linux-gnu.tar.gz
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          mac_intel_sha=$(shasum -a 256 mejiro-cli-x86_64-apple-darwin.tar.gz | cut -d ' ' -f 1)
+          mac_arm_sha=$(shasum -a 256 mejiro-cli-aarch64-apple-darwin.tar.gz | cut -d ' ' -f 1)
+          linux_sha=$(shasum -a 256 mejiro-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d ' ' -f 1)
+
+          echo "mac_intel_sha=${mac_intel_sha}" >> $GITHUB_ENV
+          echo "mac_arm_sha=${mac_arm_sha}" >> $GITHUB_ENV
+          echo "linux_sha=${linux_sha}" >> $GITHUB_ENV
+
+      - name: Update Formula
+        run: |
+          cat > Formula/mejiro-cli.rb <<EOF
+          class MejiroCli < Formula
+            desc "Tiny blog management CLI"
+            homepage "https://github.com/tsugumi-sys/mejiro"
+            license "MIT"
+          
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/tsugumi-sys/mejiro/releases/download/${{ github.event.release.tag_name }}/mejiro-cli-aarch64-apple-darwin.tar.gz"
+                sha256 "${{ env.mac_arm_sha }}"
+              else
+                url "https://github.com/tsugumi-sys/mejiro/releases/download/${{ github.event.release.tag_name }}/mejiro-cli-x86_64-apple-darwin.tar.gz"
+                sha256 "${{ env.mac_intel_sha }}"
+              end
+            end
+          
+            on_linux do
+              url "https://github.com/tsugumi-sys/mejiro/releases/download/${{ github.event.release.tag_name }}/mejiro-cli-x86_64-unknown-linux-gnu.tar.gz"
+              sha256 "${{ env.linux_sha }}"
+            end
+          
+            def install
+              bin.install "mejiro-cli"
+            end
+          
+            test do
+              system "#{bin}/mejiro-cli", "--help"
+            end
+          end
+          EOF
+
+      - name: Commit and push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Update mejiro-cli formula for ${{ github.event.release.tag_name }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
